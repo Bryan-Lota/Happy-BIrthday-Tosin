@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
@@ -13,25 +14,38 @@ interface AnimationStageProps {
 }
 
 // Moved outside to prevent re-render flicker
-const StarBackground = () => (
-  <div className="absolute inset-0 overflow-hidden z-0 pointer-events-none">
-    {Array.from({ length: 50 }).map((_, i) => (
-      <motion.div
-        key={i}
-        className="absolute bg-blue-200 rounded-full"
-        style={{
-          top: `${Math.random() * 100}%`,
-          left: `${Math.random() * 100}%`,
-          width: `${Math.random() * 2 + 1}px`, // Ensure valid px string
-          height: `${Math.random() * 2 + 1}px`,
-          boxShadow: '0 0 4px cyan'
-        }}
-        animate={{ opacity: [0.2, 0.8, 0.2], scale: [0.8, 1.2, 0.8] }}
-        transition={{ duration: 2 + Math.random() * 3, repeat: Infinity, ease: "easeInOut" }}
-      />
-    ))}
-  </div>
-);
+const StarBackground = () => {
+  // Use deterministic generation to avoid hydration mismatches or flicker
+  const stars = React.useMemo(() => {
+    return Array.from({ length: 50 }).map((_, i) => ({
+      id: i,
+      top: `${Math.random() * 100}%`,
+      left: `${Math.random() * 100}%`,
+      size: Math.random() * 2 + 1,
+      duration: 2 + Math.random() * 3
+    }));
+  }, []);
+
+  return (
+    <div className="absolute inset-0 overflow-hidden z-0 pointer-events-none">
+      {stars.map((star) => (
+        <motion.div
+          key={star.id}
+          className="absolute bg-blue-200 rounded-full"
+          style={{
+            top: star.top,
+            left: star.left,
+            width: `${star.size}px`,
+            height: `${star.size}px`,
+            boxShadow: '0 0 4px cyan'
+          }}
+          animate={{ opacity: [0.2, 0.8, 0.2], scale: [0.8, 1.2, 0.8] }}
+          transition={{ duration: star.duration, repeat: Infinity, ease: "easeInOut" }}
+        />
+      ))}
+    </div>
+  );
+};
 
 export const AnimationStage: React.FC<AnimationStageProps> = ({ currentScene, onNextScene }) => {
   const [audioEnabled, setAudioEnabled] = useState(false);
@@ -42,11 +56,14 @@ export const AnimationStage: React.FC<AnimationStageProps> = ({ currentScene, on
   const enableAudio = () => {
     setAudioEnabled(true);
     try {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-      if (audioContextRef.current?.state === 'suspended') {
-        audioContextRef.current.resume();
+      if (typeof window !== 'undefined') {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+             audioContextRef.current = new AudioCtx();
+             if (audioContextRef.current?.state === 'suspended') {
+                audioContextRef.current.resume();
+             }
+        }
       }
       
       // Preload Birthday Song
