@@ -5,12 +5,33 @@ import { Scene } from '../types';
 import { Balloons } from './Balloons';
 import { Cake } from './Cake';
 import { BirthdayCard } from './BirthdayCard';
-import { Play, Volume2, VolumeX } from 'lucide-react';
+import { Play, Volume2 } from 'lucide-react';
 
 interface AnimationStageProps {
   currentScene: Scene;
   onNextScene: (scene: Scene) => void;
 }
+
+// Moved outside to prevent re-render flicker
+const StarBackground = () => (
+  <div className="absolute inset-0 overflow-hidden z-0 pointer-events-none">
+    {Array.from({ length: 50 }).map((_, i) => (
+      <motion.div
+        key={i}
+        className="absolute bg-blue-200 rounded-full"
+        style={{
+          top: `${Math.random() * 100}%`,
+          left: `${Math.random() * 100}%`,
+          width: `${Math.random() * 2 + 1}px`, // Ensure valid px string
+          height: `${Math.random() * 2 + 1}px`,
+          boxShadow: '0 0 4px cyan'
+        }}
+        animate={{ opacity: [0.2, 0.8, 0.2], scale: [0.8, 1.2, 0.8] }}
+        transition={{ duration: 2 + Math.random() * 3, repeat: Infinity, ease: "easeInOut" }}
+      />
+    ))}
+  </div>
+);
 
 export const AnimationStage: React.FC<AnimationStageProps> = ({ currentScene, onNextScene }) => {
   const [audioEnabled, setAudioEnabled] = useState(false);
@@ -20,42 +41,50 @@ export const AnimationStage: React.FC<AnimationStageProps> = ({ currentScene, on
   // Initialize Audio on Start
   const enableAudio = () => {
     setAudioEnabled(true);
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-    }
-    if (audioContextRef.current?.state === 'suspended') {
-      audioContextRef.current.resume();
-    }
-    
-    // Preload Birthday Song
-    if (!songAudioRef.current) {
-      // Public domain Happy Birthday piano version
-      songAudioRef.current = new Audio('https://upload.wikimedia.org/wikipedia/commons/6/6e/Happy_Birthday_to_You_-_C_Major.ogg');
-      songAudioRef.current.volume = 0.4;
-      songAudioRef.current.loop = true;
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      if (audioContextRef.current?.state === 'suspended') {
+        audioContextRef.current.resume();
+      }
+      
+      // Preload Birthday Song
+      if (!songAudioRef.current) {
+        // Public domain Happy Birthday piano version
+        songAudioRef.current = new Audio('https://upload.wikimedia.org/wikipedia/commons/6/6e/Happy_Birthday_to_You_-_C_Major.ogg');
+        songAudioRef.current.volume = 0.4;
+        songAudioRef.current.loop = true;
+      }
+    } catch (e) {
+      console.error("Audio init failed", e);
     }
   };
 
   const playPopSound = () => {
     if (!audioEnabled || !audioContextRef.current) return;
     
-    const ctx = audioContextRef.current;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
+    try {
+      const ctx = audioContextRef.current;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
 
-    osc.connect(gain);
-    gain.connect(ctx.destination);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
 
-    osc.type = 'sine';
-    // Random pitch for variety
-    osc.frequency.setValueAtTime(300 + Math.random() * 150, ctx.currentTime); // Slightly lower pitch for "cool" vibe?
-    osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.1);
-    
-    gain.gain.setValueAtTime(0.1, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+      osc.type = 'sine';
+      // Random pitch for variety
+      osc.frequency.setValueAtTime(300 + Math.random() * 150, ctx.currentTime); 
+      osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.1);
+      
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
 
-    osc.start();
-    osc.stop(ctx.currentTime + 0.1);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.1);
+    } catch (e) {
+      console.error("Pop sound failed", e);
+    }
   };
 
   const playSong = () => {
@@ -66,32 +95,11 @@ export const AnimationStage: React.FC<AnimationStageProps> = ({ currentScene, on
     }
   };
 
-  // Twinkling Stars Background
-  const StarBackground = () => (
-    <div className="absolute inset-0 overflow-hidden z-0">
-      {Array.from({ length: 50 }).map((_, i) => (
-        <motion.div
-          key={i}
-          className="absolute bg-blue-100 rounded-full"
-          style={{
-            top: `${Math.random() * 100}%`,
-            left: `${Math.random() * 100}%`,
-            width: Math.random() * 3 + 1 + 'px',
-            height: Math.random() * 3 + 1 + 'px',
-            boxShadow: '0 0 5px cyan'
-          }}
-          animate={{ opacity: [0.2, 1, 0.2], scale: [0.8, 1.2, 0.8] }}
-          transition={{ duration: 2 + Math.random() * 3, repeat: Infinity, ease: "easeInOut" }}
-        />
-      ))}
-    </div>
-  );
-
   // Fireworks Trigger
   const launchFireworks = () => {
     const duration = 5 * 1000;
     const animationEnd = Date.now() + duration;
-    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 100 };
 
     const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
 
@@ -166,21 +174,28 @@ export const AnimationStage: React.FC<AnimationStageProps> = ({ currentScene, on
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.2, filter: "blur(10px)" }}
-            className="flex flex-col items-center gap-8 z-10"
+            className="flex flex-col items-center gap-8 z-50 relative"
           >
-            <h1 className="text-6xl md:text-8xl font-['Mountains_of_Christmas'] text-transparent bg-clip-text bg-gradient-to-b from-blue-400 to-cyan-200 text-center leading-tight drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]">
+            {/* Title with explicit colors fallback */}
+            <h1 className="text-6xl md:text-8xl font-['Mountains_of_Christmas'] text-blue-300 text-transparent bg-clip-text bg-gradient-to-b from-blue-400 to-cyan-200 text-center leading-tight drop-shadow-[0_0_15px_rgba(59,130,246,0.5)] p-2">
               For Tosin
             </h1>
             <p className="text-xl text-blue-200 font-['Dancing_Script']">Something wonderful awaits...</p>
+            
             <button
               onClick={() => {
                 enableAudio();
                 onNextScene(Scene.BALLOONS);
               }}
-              className="px-10 py-5 bg-gradient-to-r from-blue-600 to-indigo-700 rounded-full text-2xl font-bold text-white shadow-[0_0_30px_rgba(59,130,246,0.6)] hover:scale-105 hover:shadow-[0_0_50px_rgba(59,130,246,0.9)] transition-all duration-300 flex items-center gap-3 border-2 border-white/20"
+              className="group relative px-10 py-5 bg-blue-600 rounded-full text-2xl font-bold text-white shadow-[0_0_30px_rgba(59,130,246,0.6)] hover:scale-105 hover:bg-blue-500 hover:shadow-[0_0_50px_rgba(59,130,246,0.9)] transition-all duration-300 flex items-center gap-3 border-2 border-white/20 cursor-pointer overflow-hidden"
             >
-              <Play fill="currentColor" /> Start Experience
+              {/* Button Shine Effect */}
+              <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
+              
+              <Play fill="currentColor" /> 
+              <span className="relative z-10">Start Experience</span>
             </button>
+            
             <div className="text-white/50 text-sm flex items-center gap-2">
                <Volume2 size={14}/> Sound Effects Included
             </div>
@@ -196,7 +211,7 @@ export const AnimationStage: React.FC<AnimationStageProps> = ({ currentScene, on
         {(currentScene === Scene.CAKE_DROP || currentScene === Scene.CANDLES || currentScene === Scene.WISH_TIME) && (
           <motion.div
             key="cake-container"
-            className="absolute inset-0 flex items-center justify-center z-10"
+            className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none"
             exit={{ opacity: 0, y: 100, transition: { duration: 1 } }}
           >
             <Cake 
@@ -212,7 +227,7 @@ export const AnimationStage: React.FC<AnimationStageProps> = ({ currentScene, on
              initial={{ opacity: 0, y: 100, scale: 0.8 }}
              animate={{ opacity: 1, y: 0, scale: 1 }}
              transition={{ duration: 1, delay: 0.2 }}
-             className="z-20"
+             className="z-30 relative"
            >
              <BirthdayCard 
                isOpen={currentScene === Scene.CARD_OPEN}
@@ -233,7 +248,7 @@ export const AnimationStage: React.FC<AnimationStageProps> = ({ currentScene, on
             initial={{ opacity: 0, scale: 0.5 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.5 }}
-            className="absolute top-[15%] text-center z-30"
+            className="absolute top-[10%] text-center z-40 pointer-events-none"
           >
             <h2 className="text-5xl md:text-7xl font-['Mountains_of_Christmas'] text-yellow-300 drop-shadow-[0_0_20px_rgba(253,224,71,0.8)]">
               Make a Wish!

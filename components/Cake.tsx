@@ -17,7 +17,7 @@ export const Cake: React.FC<CakeProps> = ({ state }) => {
       transition: {
         delay: i * 0.2,
         duration: 0.5,
-        type: "spring"
+        type: "spring" as const
       }
     })
   };
